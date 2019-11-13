@@ -4,7 +4,6 @@ using GraphPlot
 using LightGraphs
 
 
-
 # We can add comments like this
 export Coord
 struct Coord{D}
@@ -15,13 +14,13 @@ Base.getindex(c::Coord, i) = c.c[i]
 
 
 
-export listGridSize
-const listGridSize = (3,3,5)
+#import listGridSize
+#const listGridSize = (3,3,5)
 
 
 
 export gridGraph
-function gridGraph(m)
+function gridGraph(listGridSize,m)
     sk = path_graph(listGridSize[length(listGridSize)])
     for i in length(listGridSize)-1:-1:1
        sk = cartesian_product(sk , path_graph(listGridSize[i]))
@@ -34,12 +33,12 @@ end
 # grid object
 
 export gridSize
-function gridSize(j)
+function gridSize(listGridSize,j)
     prod(listGridSize[1:j])
 end
 
 export crd
-function crd(m::Int)
+function crd(listGridSize,m::Int)
     d = length(listGridSize)
     c = zeros(Int, d)
     m -= 1
@@ -52,7 +51,7 @@ function crd(m::Int)
 end
 
 export lbl
-function lbl(c::Coord{D}) where {D}
+function lbl(listGridSize,c::Coord{D}) where {D}
     m = 0
     for i in D:-1:1
         m = m * listGridSize[i] + c[i]
@@ -63,7 +62,7 @@ end
 
 
 export atom
-function atom(c::Coord{D}) where {D}
+function atom(listGridSize,c::Coord{D}) where {D}
     c1 = Coord{D}[]
     for offset in CartesianIndices(ntuple(i->2, D))
         push!(c1, Coord(ntuple(i -> c[i] + offset.I[i]-1, D)))
@@ -71,8 +70,8 @@ function atom(c::Coord{D}) where {D}
     c1
 end
 
-function atom(m::Int)
-    [lbl(c) for c in atom(crd(m))]
+function atom(listGridSize,m::Int)
+    [lbl(listGridSize,c) for c in atom(listGridSize,crd(listGridSize,m))]
 end
 
 
@@ -86,23 +85,23 @@ end
 
 export atomCorner
 
-function atomCorner(m::Int, n::Int)
+function atomCorner(listGridSize,m::Int, n::Int)
     # m labels atom, n labels vertex within atom
     d = length(listGridSize)
     crn = Edgevv[]
     for i in 1:2^d
-        if sum(abs.([crd(atom(m)[n]).c...]-[crd(atom(m)[i]).c...]))==1
-            push!(crn, Edgevv(atom(m)[n], atom(m)[i]))
+        if sum(abs.([crd(listGridSize,atom(listGridSize,m)[n]).c...]-[crd(listGridSize,atom(listGridSize,m)[i]).c...]))==1
+            push!(crn, Edgevv(atom(listGridSize,m)[n], atom(listGridSize,m)[i]))
         end
     end
     crn
 end
 
-function atomCorner(c::Coord{D}, n::Int) where {D}
+function atomCorner(listGridSize,c::Coord{D}, n::Int) where {D}
     crn = Tuple{Coord{D},Coord{D}}[]
     for i in 1:2^D
-        if sum(abs.([atom(c)[n].c...]-[atom(c)[i].c...]))==1
-            push!(crn, (atom(c)[n], atom(c)[i]))
+        if sum(abs.([atom(listGridSize,c)[n].c...]-[atom(listGridSize,c)[i].c...]))==1
+            push!(crn, (atom(listGridSize,c)[n], atom(listGridSize,c)[i]))
         end
     end
     crn
@@ -132,7 +131,7 @@ struct Edgevd
 end
 
 export ampEdge
-function ampEdge(svalue,cvalue,evd::Edgevd,L)
+function ampEdge(listGridSize, svalue,cvalue,evd::Edgevd,L)
     dspc = length(listGridSize)-1
     m, dr = evd.vert, evd.dr
     if svalue[m,dr] == 0
@@ -144,10 +143,10 @@ function ampEdge(svalue,cvalue,evd::Edgevd,L)
 end
 
 export direction
-function direction(e::Edgevv)
+function direction(listGridSize, e::Edgevv)
     d = length(listGridSize)
-    mc = crd(e.v1)
-    nc = crd(e.v2)
+    mc = crd(listGridSize,e.v1)
+    nc = crd(listGridSize,e.v2)
     dist = abs.(mc.c .- nc.c)
     for i in 1:d
         if dist == ntuple(j -> i==j, d)
@@ -159,31 +158,31 @@ end
 
 export edgeVD
 """edge (vertices) to edge (vertex,direction)"""
-function edgeVD(evv::Edgevv)
-    return Edgevd(min(evv.v1, evv.v2),direction(evv))
+function edgeVD(listGridSize, evv::Edgevv)
+    return Edgevd(min(evv.v1, evv.v2),direction(listGridSize, evv))
 end
 
 export expCorner
 """(m,n) label corners. in 3d n=1,...,8"""
-function expCorner(svalue, m::Int, n::Int, a)
+function expCorner(listGridSize, svalue, m::Int, n::Int, a)
     d = length(listGridSize)
     r = a
     for i in 1:d
-        evdi = edgeVD(atomCorner(m,n)[i])
+        evdi = edgeVD(listGridSize, atomCorner(listGridSize,m,n)[i])
         r *= svalue[evdi.vert, evdi.dr]
     end
     r
 end
 
 export ampCorner
-function ampCorner(svalue, cvalue, m::Int, n::Int,a,L)
+function ampCorner(listGridSize, svalue, cvalue, m::Int, n::Int,a,L)
     d = length(listGridSize)
     p = 1.0
     for i in 1:d
-        evd = edgeVD(atomCorner(m,n)[i])
+        evd = edgeVD(listGridSize, atomCorner(listGridSize,m,n)[i])
         ss = svalue[evd.vert, evd.dr]
-        ae = ampEdge(svalue, cvalue, edgeVD(atomCorner(m,n)[i]),L)
-        ec = expCorner(svalue, m, n, a)
+        ae = ampEdge(listGridSize, svalue, cvalue, edgeVD(listGridSize, atomCorner(listGridSize,m,n)[i]),L)
+        ec = expCorner(listGridSize, svalue, m, n, a)
         p *= ae^(ec / ss)
     end
     return p
@@ -193,15 +192,15 @@ end
 
 # total amplitude
 export ampVG
-function ampVG(svalue, cvalue, a,L)
+function ampVG(listGridSize, svalue, cvalue, a,L)
     d = length(listGridSize)
-    lgs = listGridSize  
-    las = lgs.- 1    
+    lgs = listGridSize
+    las = lgs.- 1
     p = 1.0
     for i in 1:prod(las), j in 1:2^d
         #albl=atomlabel[i]
-        albl = lbl(Coord(CartesianIndices(las)[i].I.-1))
-        p *= ampCorner(svalue, cvalue, albl, j, a, L)
+        albl = lbl(listGridSize,Coord(CartesianIndices(las)[i].I.-1))
+        p *= ampCorner(listGridSize, svalue, cvalue, albl, j, a, L)
     end
     return p
 end
