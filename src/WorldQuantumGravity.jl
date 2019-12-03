@@ -116,8 +116,8 @@ export vvmd
 function vvmd(s,c,dspc)
     if s == 0
         return 1.0
-    elseif c == 0
-        return dspc/s
+    #elseif c == 0  #Wrong!
+    #    return dspc/s
     else
         return (sinc(s*sqrt(c/dspc)/pi))^(-dspc)
     end
@@ -137,7 +137,7 @@ function ampEdge(listGridSize, svalue,cvalue,evd::Edgevd,L)
     if svalue[m,dr] == 0
         return 1
     else
-        vd = vvmd(svalue[m,dr],cvalue[m,dr],dspc)
+        vd = vvmd(svalue[m,dr],cvalue[m,dr],dspc)+0im   #[[bring in complex part for caustic cases]]
         return vd^(3/vd)*exp(-L*svalue[m,dr]/vd)
     end
 end
@@ -203,6 +203,103 @@ function ampVG(listGridSize, svalue, cvalue, a,L)
         p *= ampCorner(listGridSize, svalue, cvalue, albl, j, a, L)
     end
     return p
+end
+
+
+
+
+## added
+
+# set homogeneous (same values in bulk and on boundary) spacetime configurations
+
+export svalueHom
+function svalueHom(lgs,sv)
+    d = length(lgs)
+    return fill(sv,(gridSize(lgs, d),d))
+end
+
+export cvalueHom
+function cvalueHom(lgs,cv)
+    d = length(lgs)
+    return fill(cv,(gridSize(lgs, d),d))
+end
+
+
+# [[remove duplicate entries?]]
+
+export listNeighborEdgevv
+function listNeighborEdgevv(sk,l)
+    list = Edgevv[]
+    for i in l, j in neighbors(sk,i)
+        push!(list, Edgevv(i,j))
+    end
+    list
+end
+
+
+# amplitude homogeneous bulk
+export ampVGHomBulk
+function ampVGHomBulk(lgs, svalue, cvalue, bulks, bulkc, a, L)
+    lbvs = lgs.-2 # listBulkVertexSize
+    lbv = [lbl(lgs, Coord(CartesianIndices(lbvs)[i].I)) for i in 1:prod(lbvs)] # bulk vertices
+    lbevd = [edgeVD(lgs, listNeighborEdgevv(gridGraph(lgs,0),lbv)[i]) for i in 1:length(listNeighborEdgevv(gridGraph(lgs,0),lbv))]; # bulk edges as (vertex,direction)
+
+    for i in 1:length(lbevd)
+        svalue[lbevd[i].vert...] = bulks ## is this correct? need to set for different dr?
+        cvalue[lbevd[i].vert...] = bulkc ## is this correct? need to set for different dr?
+    end
+    ampVG(lgs, svalue, cvalue, a, L)
+end
+
+export ampVGHomBulkMeasure
+function ampVGHomBulkMeasure(lgs, svalue, cvalue, bulks, bulkc, a, L)
+
+lbvs = lgs.-2 # listBulkVertexSize
+lbv = [lbl(lgs, Coord(CartesianIndices(lbvs)[i].I)) for i in 1:prod(lbvs)] # bulk vertices
+lbevd = [edgeVD(lgs, listNeighborEdgevv(gridGraph(lgs,0),lbv)[i]) for i in 1:length(listNeighborEdgevv(gridGraph(lgs,0),lbv))]; # bulk edges as (vertex,direction)
+
+    for i in 1:length(lbevd)
+        svalue[lbevd[i].vert...] = bulks
+        cvalue[lbevd[i].vert...] = bulkc
+    end
+    ampVG(lgs, svalue, cvalue, a, L)* prod(2 .* svalue)
+end
+
+# "caustic restriction"
+export smax
+function smax(c,dspac) #dspc is SPATIAL dimension
+    pi*sqrt(dspac/c)
+end
+
+# amplitude homogeneous bulk with caustic restriction
+export ampVGHomBulkRes
+function ampVGHomBulkRes(lgs, svalue, cvalue, bulks, bulkc, a, L)
+
+lbvs = lgs.-2 # listBulkVertexSize
+lbv = [lbl(lgs, Coord(CartesianIndices(lbvs)[i].I)) for i in 1:prod(lbvs)] # bulk vertices
+lbevd = [edgeVD(lgs, listNeighborEdgevv(gridGraph(lgs,0),lbv)[i]) for i in 1:length(listNeighborEdgevv(gridGraph(lgs,0),lbv))]; # bulk edges as (vertex,direction)
+
+    if 0 <= bulks <= smax(bulkc,length(lgs)-1) && 0 <= bulkc ##
+        return ampVGHomBulk(lgs, svalue, cvalue, bulks, bulkc, a, L)
+    else
+        return 0
+    end
+end
+
+
+# amplitude homogeneous bulk with caustic restriction
+export ampVGHomBulkResMeasure
+function ampVGHomBulkResMeasure(lgs, svalue, cvalue, bulks, bulkc, a, L)
+
+lbvs = lgs.-2 # listBulkVertexSize
+lbv = [lbl(lgs, Coord(CartesianIndices(lbvs)[i].I)) for i in 1:prod(lbvs)] # bulk vertices
+lbevd = [edgeVD(lgs, listNeighborEdgevv(gridGraph(lgs,0),lbv)[i]) for i in 1:length(listNeighborEdgevv(gridGraph(lgs,0),lbv))]; # bulk edges as (vertex,direction)
+
+    if 0 <= bulks <= smax(bulkc,length(lgs)-1) && 0 <= bulkc ##
+        return ampVGHomBulkMeasure(lgs, svalue, cvalue, bulks, bulkc, a, L)
+    else
+        return 0
+    end
 end
 
 end
