@@ -2,6 +2,8 @@ module WorldQuantumGravity
 
 using GraphPlot
 using LightGraphs
+using SparseArrays
+
 
 
 # We can add comments like this
@@ -71,6 +73,7 @@ function atom(listGridSize,c::Coord{D}) where {D}
 end
 
 function atom(listGridSize,m::Int)
+# m is vertex label
     [lbl(listGridSize,c) for c in atom(listGridSize,crd(listGridSize,m))]
 end
 
@@ -86,7 +89,7 @@ end
 export atomCorner
 
 function atomCorner(listGridSize,m::Int, n::Int)
-    # m labels atom, n labels vertex within atom
+    # m labels atom by vertex label, n from 1 to 2^d enumerates vertex within atom
     d = length(listGridSize)
     crn = Edgevv[]
     for i in 1:2^d
@@ -113,13 +116,20 @@ end
 
 export vvmd
 """dspc = spatial dimension"""
+#function vvmd(s,c,dspc)
+#    if s == 0
+#        return 1.0
+#    else
+#        return (sinc(s*sqrt(c/dspc)/pi))^(-dspc)
+#    end
+#end
+
+## take in negative c
 function vvmd(s,c,dspc)
     if s == 0
         return 1.0
-    #elseif c == 0  #Wrong!
-    #    return dspc/s
     else
-        return (sinc(s*sqrt(c/dspc)/pi))^(-dspc)
+        return real((sinc(s*sqrt(Complex(c)/dspc)/pi))^(-dspc))
     end
 end
 
@@ -137,7 +147,7 @@ function ampEdge(listGridSize, svalue,cvalue,evd::Edgevd,L)
     if svalue[m,dr] == 0
         return 1
     else
-        vd = vvmd(svalue[m,dr],cvalue[m,dr],dspc)+0im   #[[bring in complex part for caustic cases]]
+        vd = vvmd(svalue[m,dr],cvalue[m,dr],dspc)+0im
         return vd^(3/vd)*exp(-L*svalue[m,dr]/vd)
     end
 end
@@ -210,6 +220,33 @@ end
 
 ## added
 
+# "caustic restriction"
+export smax
+function smax(c,dspac) #dspc is SPATIAL dimension
+    pi*sqrt(dspac/c)
+end
+
+# vary certain edge configurations
+
+# using SparseArrays
+
+export ampVGvar
+function ampVGvar(lgs, sInitial, cInitial, sVar::SparseMatrixCSC, cVar::SparseMatrixCSC, a, L)
+
+# sVar, cVar format: (vertex,direction,value)
+
+    for i in 1:length(sVar.rowval)
+        sInitial[findnz(sVar)[1][i],findnz(sVar)[2][i]] = findnz(sVar)[3][i]
+    end
+
+    for i in 1:length(cVar.rowval)
+        cInitial[findnz(cVar)[1][i],findnz(cVar)[2][i]] = findnz(cVar)[3][i]
+    end
+
+    ampVG(lgs, sInitial, cInitial, a, L)
+end
+
+
 # set homogeneous (same values in bulk and on boundary) spacetime configurations
 
 export svalueHom
@@ -224,7 +261,6 @@ function cvalueHom(lgs,cv)
     return fill(cv,(gridSize(lgs, d),d))
 end
 
-
 # [[remove duplicate entries?]]
 
 export listNeighborEdgevv
@@ -235,7 +271,6 @@ function listNeighborEdgevv(sk,l)
     end
     list
 end
-
 
 # amplitude homogeneous bulk
 export ampVGHomBulk
@@ -263,12 +298,6 @@ lbevd = [edgeVD(lgs, listNeighborEdgevv(gridGraph(lgs,0),lbv)[i]) for i in 1:len
         cvalue[lbevd[i].vert...] = bulkc
     end
     ampVG(lgs, svalue, cvalue, a, L)* prod(2 .* svalue)
-end
-
-# "caustic restriction"
-export smax
-function smax(c,dspac) #dspc is SPATIAL dimension
-    pi*sqrt(dspac/c)
 end
 
 # amplitude homogeneous bulk with caustic restriction
